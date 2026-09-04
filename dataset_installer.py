@@ -3,7 +3,7 @@ import gdown
 import zipfile
 from pathlib import Path
 
-DATASET_DIR = "./datasets"
+DATASET_DIR = "./data"
 
 DATASETS = {
 	"air_quality.zip": "https://drive.google.com/file/d/1NGT8RR-NtBf-4xxII4pfwBanE_BgBvoW/view?usp=drive_link",
