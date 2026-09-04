@@ -33,18 +33,21 @@ builder = (
         f"jdbc:derby:{METASTORE_DIR};create=true"
     )
 
+	# specify compression codec for linux (arch, btw) compatability
+    .config("spark.sql.parquet.compression.codec", "zstd")
+
     # IMPORTANT
     .enableHiveSupport()
 )
 
 spark = configure_spark_with_delta_pip(builder).getOrCreate()
 
-print(spark.catalog.currentDatabase())
-print(spark.catalog.listTables())
+print(f'current database: {spark.catalog.currentDatabase()}')
+print(f'spark tables: {spark.catalog.listTables()}')
 
 table_name = "default.location_lookup"
 if not spark.catalog.tableExists(table_name):
-    # Read CSV, note that we are inferring the schema here, but we will change it to define the schema explicitly 
+    # Read CSV, note that we are inferring the schema here, but we will change it to define the schema explicitly
     df = spark.read \
         .option("header", "true") \
         .option("inferSchema", "true") \
