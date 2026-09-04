@@ -221,4 +221,6 @@ __marimo__/
 # others
 data/
 datasets/
+spark_project/
 eddie/
+
