@@ -1,0 +1,26 @@
+{
+  "source": "data/air_quality/hourly_88101_2024.csv",
+  "columns": [
+    {
+      "source": "County Name",
+      "name": "county",
+      "type": "string",
+      "nullable": false,
+      "description": "County Name"
+    },
+    {
+      "source": ["Date Local", "Time Local"],
+      "name": "datetime",
+      "type": "timestamp",
+      "nullable": false,
+      "description": "Date and Time of the measurement"
+    },
+    {
+      "source": "Sample Measurement",
+      "name": "measurement",
+      "type": "float",
+      "nullable": true,
+      "description": "Measurement value"
+    }
+  ]
+}

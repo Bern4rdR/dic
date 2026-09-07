@@ -1,0 +1,26 @@
+{
+  "source": "data/taxi_zone_lookup.csv",
+  "columns": [
+    {
+      "source": "LocationID",
+      "name": "location_id",
+      "type": "int",
+      "nullable": false,
+      "description": "Unique location identifier"
+    },
+    {
+      "source": "Borough",
+      "name": "county",
+      "type": "string",
+      "nullable": false,
+      "description": "County name"
+    },
+    {
+      "source": "Zone",
+      "name": "zone",
+      "type": "string",
+      "nullable": false,
+      "description": "Taxi zone"
+    }
+  ]
+}

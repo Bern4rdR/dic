@@ -1,0 +1,40 @@
+{
+  "source": "data/yellow_tripdata_1.parquet",
+  "columns": [
+     {
+      "source": null,
+      "name": "trip_id",
+      "type": "int",
+      "nullable": false,
+      "description": "Trip ID"
+    },
+    {
+      "source": "tpep_pickup_datetime",
+      "name": "pu_datetime",
+      "type": "timestamp",
+      "nullable": false,
+      "description": "Pickup datetime"
+    },
+    {
+      "source": "tpep_dropoff_datetime",
+      "name": "do_datetime",
+      "type": "timestamp",
+      "nullable": false,
+      "description": "Dropoff datetime"
+    },
+    {
+      "source": "PULocationID",
+      "name": "pu_location_id",
+      "type": "int",
+      "nullable": true,
+      "description": "Pickup Location ID"
+    },
+    {
+      "source": "DOLocationID",
+      "name": "do_location_id",
+      "type": "int",
+      "nullable": true,
+      "description": "Dropoff Location ID"
+    }
+  ]
+}
