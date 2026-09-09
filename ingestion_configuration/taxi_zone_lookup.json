@@ -1,5 +1,6 @@
 {
   "source": "data/taxi_zone_lookup.csv",
+  "name": "taxi_zone_lookup",
   "columns": [
     {
       "source": "LocationID",

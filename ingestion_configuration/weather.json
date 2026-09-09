@@ -1,5 +1,6 @@
 {
   "source": "data/weather.csv",
+  "name": "weather",
   "columns": [
     {
       "source": ["year", "month", "day", "hour"],

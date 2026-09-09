@@ -1,5 +1,6 @@
 {
   "source": "data/yellow_tripdata_1.parquet",
+  "name": "taxi_trips",
   "columns": [
      {
       "source": null,

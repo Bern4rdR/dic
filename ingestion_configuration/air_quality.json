@@ -1,5 +1,6 @@
 {
   "source": "data/air_quality/hourly_88101_2024.csv",
+  "name": "air_quality",
   "columns": [
     {
       "source": "County Name",
