@@ -2,10 +2,13 @@ from delta import *
 import pyspark
 from pathlib import Path
 
-BASE_DIR = Path("spark_project")
 
+DB_SRC = "data"
+
+BASE_DIR = Path("spark_project")
 WAREHOUSE_DIR = BASE_DIR / "spark-warehouse"
 METASTORE_DIR = BASE_DIR / "metastore_db"
+
 
 builder = (
     pyspark.sql.SparkSession.builder
@@ -80,10 +83,11 @@ from pathlib import Path
 
 for config_file in Path("ingestion_configuration").glob("*.json"):
 
+	# 1. Load the configuration and dataframe
     with open(config_file) as f:
         config = json.load(f)
 
-  
+
     if config["source"].endswith(".parquet"):
         df = spark.read \
             .option("header", True) \
@@ -94,7 +98,7 @@ for config_file in Path("ingestion_configuration").glob("*.json"):
             .option("header", True) \
             .option("inferSchema", False) \
             .csv(config["source"])
-   
+
 
     # 2. Build the selected/transformed columns
     selected_columns = []
@@ -109,12 +113,12 @@ for config_file in Path("ingestion_configuration").glob("*.json"):
 
         if isinstance(source, list):
             if data_type == "timestamp":
-                if config["source"] == "data/air_quality/hourly_88101_2024.csv":
+                if config["source"] == f"{DB_SRC}/air_quality/hourly_88101_2024.csv":
                     expr = F.to_timestamp(
                         F.concat_ws(" ", *[F.col(c) for c in source]),
                         "yyyy-MM-dd HH:mm"
                     ).alias(name)
-                elif config["source"] == "data/weather.csv":
+                elif config["source"] == f"{DB_SRC}/weather.csv":
                     expr = F.to_timestamp(
                         F.concat_ws(
                             " ",
@@ -161,6 +165,9 @@ for config_file in Path("ingestion_configuration").glob("*.json"):
 
     result_df.printSchema()
     result_df.show(truncate=False)
+
+    # persist delta table
+    result_df.write.format("delta").mode("overwrite").save(f"{WAREHOUSE_DIR}/{config['name']}")
 
 
 # df = read_source(spark, config["source"])
