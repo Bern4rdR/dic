@@ -1,6 +1,6 @@
 from delta import *
-import pyspark
 from pathlib import Path
+from custom_builder import builder
 
 
 DB_SRC = "data"
@@ -9,39 +9,6 @@ BASE_DIR = Path("spark_project")
 WAREHOUSE_DIR = BASE_DIR / "spark-warehouse"
 METASTORE_DIR = BASE_DIR / "metastore_db"
 
-
-builder = (
-    pyspark.sql.SparkSession.builder
-    .appName("MyApp")
-
-    # Delta
-    .config(
-        "spark.sql.extensions",
-        "io.delta.sql.DeltaSparkSessionExtension"
-    )
-    .config(
-        "spark.sql.catalog.spark_catalog",
-        "org.apache.spark.sql.delta.catalog.DeltaCatalog"
-    )
-
-    # Persistent table storage
-    .config(
-        "spark.sql.warehouse.dir",
-        str(WAREHOUSE_DIR)
-    )
-
-    # Persistent Hive metastore
-    .config(
-        "javax.jdo.option.ConnectionURL",
-        f"jdbc:derby:{METASTORE_DIR};create=true"
-    )
-
-	# specify compression codec for linux (arch, btw) compatability
-    .config("spark.sql.parquet.compression.codec", "zstd")
-
-    # IMPORTANT
-    .enableHiveSupport()
-)
 
 spark = configure_spark_with_delta_pip(builder).getOrCreate()
 

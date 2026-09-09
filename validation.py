@@ -1,11 +1,10 @@
 from delta import *
-from pyarrow import NullArray
-import pyspark
 from pyspark.sql import DataFrame, SparkSession
 import pyspark.sql.functions as F
 from pathlib import Path
 import json
 import os
+from custom_builder import builder
 
 
 TABLE_RULES_SRC = Path("./ingestion_configuration")
@@ -78,20 +77,6 @@ def filter_table(df, table_name) -> DataFrame:
 
 
 if __name__ == "__main__":
-	builder = (
-	    SparkSession.builder
-		    .appName("MyApp")
-
-		    .config(
-		        "spark.sql.extensions",
-		        "io.delta.sql.DeltaSparkSessionExtension"
-		    )
-		    .config(
-		        "spark.sql.catalog.spark_catalog",
-		        "org.apache.spark.sql.delta.catalog.DeltaCatalog"
-		    )
-			.config("spark.sql.parquet.compression.codec", "zstd")
-	)
 	spark = configure_spark_with_delta_pip(builder).getOrCreate()
 	spark.sparkContext.setLogLevel("ERROR")
 
