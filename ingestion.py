@@ -1,7 +1,7 @@
 from delta import *
 from pathlib import Path
 from custom_builder import builder
-
+from log import *
 
 DB_SRC = "data"
 
@@ -48,93 +48,99 @@ from pyspark.sql import functions as F
 import json
 from pathlib import Path
 
+
 for config_file in Path("ingestion_configuration").glob("*.json"):
-
-	# 1. Load the configuration and dataframe
-    with open(config_file) as f:
-        config = json.load(f)
-
-
-    if config["source"].endswith(".parquet"):
-        df = spark.read \
-            .option("header", True) \
-            .option("inferSchema", False) \
-            .parquet(config["source"])
-    else:
-        df = spark.read \
-            .option("header", True) \
-            .option("inferSchema", False) \
-            .csv(config["source"])
+    
+    with log_step("ingest_data") as info:
+        # 1. Load the configuration and dataframe
+        with open(config_file) as f:
+            config = json.load(f)
 
 
-    # 2. Build the selected/transformed columns
-    selected_columns = []
-
-    for column in config["columns"]:
-        source = column["source"]
-        name = column["name"]
-        data_type = column["type"]
-
-        if source is None:
-            continue
-
-        if isinstance(source, list):
-            if data_type == "timestamp":
-                if config["source"] == f"{DB_SRC}/air_quality/hourly_88101_2024.csv":
-                    expr = F.to_timestamp(
-                        F.concat_ws(" ", *[F.col(c) for c in source]),
-                        "yyyy-MM-dd HH:mm"
-                    ).alias(name)
-                elif config["source"] == f"{DB_SRC}/weather.csv":
-                    expr = F.to_timestamp(
-                        F.concat_ws(
-                            " ",
-                            F.concat_ws(
-                                "-",
-                                F.col(source[0]),
-                                F.lpad(F.col(source[1]), 2, "0"),
-                                F.lpad(F.col(source[2]), 2, "0")
-                            ),
-                            F.concat(
-                                F.lpad(F.col(source[3]), 2, "0"),
-                                F.lit(":00")
-                            )
-                        ),
-                        "yyyy-MM-dd HH:mm"
-                    ).alias(name)
-            else:
-                raise ValueError(
-                    f"Multiple source columns are only handled for timestamp, "
-                    f"got type={data_type}"
-                )
-
+        if config["source"].endswith(".parquet"):
+            df = spark.read \
+                .option("header", True) \
+                .option("inferSchema", False) \
+                .parquet(config["source"])
         else:
-            expr = F.col(source)
+            df = spark.read \
+                .option("header", True) \
+                .option("inferSchema", False) \
+                .csv(config["source"])
+        
+    # ideally we would perform validation here
+    # atm, we do ingestion and transformation before validation
 
-            # Apply configured type
-            if data_type == "string":
-                expr = expr.cast("string")
-            elif data_type == "float":
-                expr = expr.cast("float")
-            elif data_type == "int":
-                expr = expr.cast("int")
-            elif data_type == "timestamp":
-                expr = F.to_timestamp(expr)
+    with log_step("transform_data") as info:
+        
+        # 2. Build the selected/transformed columns
+        selected_columns = []
 
-            expr = expr.alias(name)
+        for column in config["columns"]:
+            source = column["source"]
+            name = column["name"]
+            data_type = column["type"]
 
-        selected_columns.append(expr)
+            if source is None:
+                continue
 
-    # print(f"Selected columns: {[c._jc.toString() for c in selected_columns]}")
+            if isinstance(source, list):
+                if data_type == "timestamp":
+                    if config["source"] == f"{DB_SRC}/air_quality/hourly_88101_2024.csv":
+                        expr = F.to_timestamp(
+                            F.concat_ws(" ", *[F.col(c) for c in source]),
+                            "yyyy-MM-dd HH:mm"
+                        ).alias(name)
+                    elif config["source"] == f"{DB_SRC}/weather.csv":
+                        expr = F.to_timestamp(
+                            F.concat_ws(
+                                " ",
+                                F.concat_ws(
+                                    "-",
+                                    F.col(source[0]),
+                                    F.lpad(F.col(source[1]), 2, "0"),
+                                    F.lpad(F.col(source[2]), 2, "0")
+                                ),
+                                F.concat(
+                                    F.lpad(F.col(source[3]), 2, "0"),
+                                    F.lit(":00")
+                                )
+                            ),
+                            "yyyy-MM-dd HH:mm"
+                        ).alias(name)
+                else:
+                    raise ValueError(
+                        f"Multiple source columns are only handled for timestamp, "
+                        f"got type={data_type}"
+                    )
 
-    # 3. Select only the configured columns
-    result_df = df.select(*selected_columns)
+            else:
+                expr = F.col(source)
+
+                # Apply configured type
+                if data_type == "string":
+                    expr = expr.cast("string")
+                elif data_type == "float":
+                    expr = expr.cast("float")
+                elif data_type == "int":
+                    expr = expr.cast("int")
+                elif data_type == "timestamp":
+                    expr = F.to_timestamp(expr)
+
+                expr = expr.alias(name)
+
+            selected_columns.append(expr)
+
+        # print(f"Selected columns: {[c._jc.toString() for c in selected_columns]}")
+        result_df = df.select(*selected_columns)
 
     result_df.printSchema()
-    result_df.show(truncate=False)
+    result_df.show(truncate=False)          
 
-    # persist delta table
-    result_df.write.format("delta").mode("overwrite").save(f"{WAREHOUSE_DIR}/{config['name']}")
+    with log_step("write_delta") as info:
+    
+        # persist delta table
+        result_df.write.format("delta").mode("overwrite").saveAsTable(f"{config['name']}")
 
 
 # df = read_source(spark, config["source"])

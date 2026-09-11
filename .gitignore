@@ -223,4 +223,5 @@ data/
 datasets/
 spark_project/
 eddie/
+logs/
 

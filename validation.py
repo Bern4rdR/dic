@@ -5,6 +5,7 @@ from pathlib import Path
 import json
 import os
 from custom_builder import builder
+from log import *
 
 
 TABLE_RULES_SRC = Path("./ingestion_configuration")
@@ -76,7 +77,9 @@ def filter_table(df, table_name) -> DataFrame:
 			raise Exception(f"✗ Unknown table: '{table_name}'")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  
+	# TODO: change so validation occurs after ingestion and before transformation. 
+	# TODO: also change so that so that validation and filtering occurs on dataframes connected to tables with no overwrites, just updates that can be seen in deltalog
 	spark = configure_spark_with_delta_pip(builder).getOrCreate()
 	spark.sparkContext.setLogLevel("ERROR")
 
@@ -86,13 +89,16 @@ if __name__ == "__main__":
 			df = spark.read.format("delta").load(str(WAREHOUSE_DIR / rules['name']))
 
 			print(f"\n{'⠛'*80}\nValidating {rules['name']}...")
-			validate_table(df, rules)
-			filtered_df = filter_table(df, rules["name"])
+			with log_step(f"validate_data") as info:
+				validate_table(df, rules)
+				filtered_df = filter_table(df, rules["name"])
+				row_diff = df.count() - filtered_df.count()
+				info["removed_rows"] = row_diff
 
-			row_diff = df.count() - filtered_df.count()
+			
 			print(f"{row_diff} rows removed ({filtered_df.count()} remaining)")
 
-			# replace existing delta table with filtered data
+			# replace existing delta table with filtered data 
 			filtered_df.write \
 				.format("delta") \
 				.mode("overwrite") \
