@@ -58,7 +58,7 @@ def log_step(name, info=None):
     except Exception:
         step["ended_at"] = datetime.now().isoformat(timespec="seconds")
         step["duration_seconds"] = round(
-            time.perf_counter() - timer, 2
+            time.perf_counter() - timer, 5
         )
         step["status"] = "failed"
         save_log()
@@ -67,7 +67,7 @@ def log_step(name, info=None):
     else:
         step["ended_at"] = datetime.now().isoformat(timespec="seconds")
         step["duration_seconds"] = round(
-            time.perf_counter() - timer, 2
+            time.perf_counter() - timer, 5
         )
         step["status"] = "success"
         save_log()
