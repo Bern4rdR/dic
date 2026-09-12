@@ -6,7 +6,27 @@ Run `uv sync` to update dependencies
 
 ## Running
 
-### Creating the tables
+### Creating the table
+**1. Download the datasets**
+```
+uv run download_datasets.py
+```
+- this will download the datasets to the `data/` directory
+
+**2. Format the datasets**
+```
+uv run main.py
+```
+- this will format the datasets and store them in `spark_project/`
+
+**3. Enrich the datasets**
+```
+uv run enrich.py
+```
+- this will create an enriched table from the validated data
+
+
+### Creating the tables (Manually)
 **1. Download the datasets**
 ```
 uv run download_datasets.py
