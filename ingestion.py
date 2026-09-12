@@ -1,58 +1,19 @@
 from typing import Any
 
+import json
 from delta import *
 from pathlib import Path
 
+from pyspark.sql import functions as F
 from pyspark.sql.dataframe import DataFrame
 from custom_builder import builder
 from log import *
 
+
 DB_SRC = "data"
 
-BASE_DIR = Path("spark_project")
-WAREHOUSE_DIR = BASE_DIR / "spark-warehouse"
-METASTORE_DIR = BASE_DIR / "metastore_db"
 
-
-spark = configure_spark_with_delta_pip(builder).getOrCreate()
-
-print(f'current database: {spark.catalog.currentDatabase()}')
-print(f'spark tables: {spark.catalog.listTables()}')
-
-# table_name = "default.location_lookup"
-# if not spark.catalog.tableExists(table_name):
-#     # Read CSV, note that we are inferring the schema here, but we will change it to define the schema explicitly
-#     df = spark.read \
-#         .option("header", "true") \
-#         .option("inferSchema", "true") \
-#         .csv("data/taxi_zone_lookup.csv")
-
-#     # Write as Delta
-#     df.write \
-#         .format("delta") \
-#         .mode("overwrite") \
-#         .saveAsTable(table_name)
-# else:
-#     print("Delta table already exists — skipping ingestion")
-
-# df = spark.read.table(table_name)
-
-# df.show()
-
-# df = spark.sql("""
-#     SELECT *
-#     FROM location_lookup
-#     WHERE Borough = 'Manhattan'
-# """)
-
-# df.show()
-
-from pyspark.sql import functions as F
-
-import json
-from pathlib import Path
-
-def ingest(conf) -> tuple[DataFrame, Any]:
+def ingest(spark, conf) -> tuple[DataFrame, Any]:
     # 1. Load the configuration and dataframe
     with open(conf) as f:
         config = json.load(f)
@@ -135,8 +96,13 @@ def transform(df, config) -> DataFrame:
 
 
 if __name__ == "__main__":
+	spark = configure_spark_with_delta_pip(builder).getOrCreate()
+
+	print(f'current database: {spark.catalog.currentDatabase()}')
+	print(f'spark tables: {spark.catalog.listTables()}')
+
 	for config_file in Path("ingestion_configuration").glob("*.json"):
-		df, config = ingest(config_file)
+		df, config = ingest(spark, config_file)
 		result_df = transform(df, config)
 
 		result_df.printSchema()

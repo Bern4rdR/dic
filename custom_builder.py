@@ -18,6 +18,16 @@ builder = (
         "org.apache.spark.sql.delta.catalog.DeltaCatalog"
     )
 
+	# Disable hive column checks
+     .config(
+        "spark.hadoop.hive.metastore.disallow.incompatible.col.type.changes",
+        "false"
+    )
+    .config(
+        "hive.metastore.disallow.incompatible.col.type.changes",
+        "false"
+    )
+
     # Persistent table storage
     .config(
         "spark.sql.warehouse.dir",
