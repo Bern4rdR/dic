@@ -3,13 +3,20 @@ import pandas as pd
 from pathlib import Path
 from log import *
 from delta import *
+import os
 
+from dataset_installer import download_datasets
 from custom_builder import builder
 from ingestion import ingest, transform
 from validation import validate_table, filter_table
+from enrich import enrich, load_dfs
 
 
 if __name__ == "__main__":
+	if not os.path.exists("./data") or len(os.listdir("./data")) == 0:
+		print("No data found. Downloading datasets...")
+		download_datasets()
+
 	spark = configure_spark_with_delta_pip(builder).getOrCreate()
 
 	print(f'current database: {spark.catalog.currentDatabase()}')
@@ -37,3 +44,11 @@ if __name__ == "__main__":
 		with log_step("write_delta"):
 	        # persist delta table
 			filtered_df.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{config['name']}")
+
+
+	# Enrich
+	trips_df, pu_zone, do_zone, aq_df, weather_df = load_dfs(spark)
+	enriched_df = enrich(trips_df, pu_zone, do_zone, aq_df, weather_df)
+
+	enriched_df.printSchema()
+	enriched_df.show()

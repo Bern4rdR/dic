@@ -2,12 +2,34 @@ from delta import *
 from pyspark.sql.dataframe import DataFrame
 import pyspark.sql.functions as F
 from pathlib import Path
+
+from pyspark.sql.session import SparkSession
 from custom_builder import builder
 
 
 BASE_DIR = Path("spark_project")
 WAREHOUSE_DIR = BASE_DIR / "spark-warehouse"
 METASTORE_DIR = BASE_DIR / "metastore_db"
+
+
+def load_dfs(spark: SparkSession):
+	trips_df = spark.read.format("delta").load(str(WAREHOUSE_DIR / "taxi_trips"))
+	zone_df = spark.read.format("delta").load(str(WAREHOUSE_DIR / "taxi_zone_lookup"))
+	aq_df = spark.read.format("delta").load(str(WAREHOUSE_DIR / "air_quality"))
+	weather_df = spark.read.format("delta").load(str(WAREHOUSE_DIR / "weather"))
+
+	pu_zone = zone_df.select(
+		F.col("location_id").alias("pu_location_id"),
+		F.col("zone").alias("pu_zone"),
+		F.col("county").alias("pu_county"),
+	)
+	do_zone = zone_df.select(
+		F.col("location_id").alias("do_location_id"),
+		F.col("zone").alias("do_zone"),
+		F.col("county").alias("do_county"),
+	)
+
+	return trips_df, pu_zone, do_zone, aq_df, weather_df
 
 
 def enrich(trips_df: DataFrame, pu_zone: DataFrame, do_zone: DataFrame, aq_df: DataFrame, weather_df: DataFrame):
@@ -58,21 +80,7 @@ def enrich(trips_df: DataFrame, pu_zone: DataFrame, do_zone: DataFrame, aq_df: D
 if __name__ == "__main__":
 	spark = configure_spark_with_delta_pip(builder).getOrCreate()
 
-	trips_df = spark.read.format("delta").load(str(WAREHOUSE_DIR / "taxi_trips"))
-	zone_df = spark.read.format("delta").load(str(WAREHOUSE_DIR / "taxi_zone_lookup"))
-	aq_df = spark.read.format("delta").load(str(WAREHOUSE_DIR / "air_quality"))
-	weather_df = spark.read.format("delta").load(str(WAREHOUSE_DIR / "weather"))
-
-	pu_zone = zone_df.select(
-		F.col("location_id").alias("pu_location_id"),
-		F.col("zone").alias("pu_zone"),
-		F.col("county").alias("pu_county"),
-	)
-	do_zone = zone_df.select(
-		F.col("location_id").alias("do_location_id"),
-		F.col("zone").alias("do_zone"),
-		F.col("county").alias("do_county"),
-	)
+	trips_df, pu_zone, do_zone, aq_df, weather_df = load_dfs(spark)
 
 	enriched_df = enrich(trips_df, pu_zone, do_zone, aq_df, weather_df)
 
