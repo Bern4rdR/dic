@@ -36,6 +36,13 @@
       "type": "int",
       "nullable": true,
       "description": "Dropoff Location ID"
+    },
+    {
+      "source": "fare_amount",
+      "name": "fare_amount",
+      "type": "float",
+      "nullable": true,
+      "description": "Fare amount"
     }
   ]
 }
