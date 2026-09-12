@@ -1,10 +1,9 @@
 from delta import *
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
 from pathlib import Path
 import json
 import os
-from custom_builder import builder
 from log import *
 
 
@@ -77,8 +76,9 @@ def filter_table(df, table_name) -> DataFrame:
 			raise Exception(f"✗ Unknown table: '{table_name}'")
 
 
-if __name__ == "__main__":  
-	# TODO: change so validation occurs after ingestion and before transformation. 
+if __name__ == "__main__":
+	from custom_builder import builder
+	# TODO: change so validation occurs after ingestion and before transformation.
 	# TODO: also change so that so that validation and filtering occurs on dataframes connected to tables with no overwrites, just updates that can be seen in deltalog
 	spark = configure_spark_with_delta_pip(builder).getOrCreate()
 	spark.sparkContext.setLogLevel("ERROR")
@@ -95,10 +95,10 @@ if __name__ == "__main__":
 				row_diff = df.count() - filtered_df.count()
 				info["removed_rows"] = row_diff
 
-			
+
 			print(f"{row_diff} rows removed ({filtered_df.count()} remaining)")
 
-			# replace existing delta table with filtered data 
+			# replace existing delta table with filtered data
 			filtered_df.write \
 				.format("delta") \
 				.mode("overwrite") \

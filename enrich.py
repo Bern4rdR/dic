@@ -1,7 +1,9 @@
 from delta import *
-from pyspark.sql import SparkSession
+from pyspark.sql.dataframe import DataFrame
 import pyspark.sql.functions as F
 from pathlib import Path
+
+from pyspark.sql.session import SparkSession
 from custom_builder import builder
 
 
@@ -10,9 +12,7 @@ WAREHOUSE_DIR = BASE_DIR / "spark-warehouse"
 METASTORE_DIR = BASE_DIR / "metastore_db"
 
 
-if __name__ == "__main__":
-	spark = configure_spark_with_delta_pip(builder).getOrCreate()
-
+def load_dfs(spark: SparkSession):
 	trips_df = spark.read.format("delta").load(str(WAREHOUSE_DIR / "taxi_trips"))
 	zone_df = spark.read.format("delta").load(str(WAREHOUSE_DIR / "taxi_zone_lookup"))
 	aq_df = spark.read.format("delta").load(str(WAREHOUSE_DIR / "air_quality"))
@@ -29,7 +29,11 @@ if __name__ == "__main__":
 		F.col("county").alias("do_county"),
 	)
 
-	enriched_df = (
+	return trips_df, pu_zone, do_zone, aq_df, weather_df
+
+
+def enrich(trips_df: DataFrame, pu_zone: DataFrame, do_zone: DataFrame, aq_df: DataFrame, weather_df: DataFrame):
+	return (
 		trips_df.alias("t")
 
 		# pu_location_id -> county, zone
@@ -72,6 +76,13 @@ if __name__ == "__main__":
 			F.col("w.datetime")
 		)
 	)
+
+if __name__ == "__main__":
+	spark = configure_spark_with_delta_pip(builder).getOrCreate()
+
+	trips_df, pu_zone, do_zone, aq_df, weather_df = load_dfs(spark)
+
+	enriched_df = enrich(trips_df, pu_zone, do_zone, aq_df, weather_df)
 
 	enriched_df.printSchema()
 	enriched_df.show()

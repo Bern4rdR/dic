@@ -6,7 +6,14 @@ Run `uv sync` to update dependencies
 
 ## Running
 
-### Creating the tables
+### Creating the table
+```
+uv run main.py
+```
+- this will run the installer (if necessary) and create the tables, transform, and validate them
+
+
+### Creating the tables (Manually)
 **1. Download the datasets**
 ```
 uv run download_datasets.py

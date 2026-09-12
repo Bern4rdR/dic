@@ -1,7 +1,6 @@
 import os
 import gdown
 import zipfile
-from pathlib import Path
 
 DATASET_DIR = "./data"
 
