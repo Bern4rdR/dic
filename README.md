@@ -41,3 +41,7 @@ uv run enrich.py
 ```
 - this creates a enriched table from the validated data
 	- containing weather and air quality data connected to each taxi trip
+
+**5. Benchmark partitioned tables**
+
+The code for creating and benchmarking the two partitioned versions of `taxi_trips` is available in `task_6.ipynb`. All sections should be run in sequence with possible exception of the last one, the 'Drop partitioned tables' section, which is useful for returing to the clean previous state before benchmarking. 
