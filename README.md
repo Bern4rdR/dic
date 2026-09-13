@@ -1,6 +1,8 @@
 ## Installation
 This project uses `uv` to manage dependencies
 
+Run `uv add -r requirements.txt` to import dependencies
+
 Run `uv sync` to update dependencies
 
 
