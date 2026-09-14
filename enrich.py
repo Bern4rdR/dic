@@ -86,4 +86,7 @@ if __name__ == "__main__":
 
 	enriched_df.printSchema()
 	enriched_df.show()
+
+	if spark.catalog.tableExists("integrated_taxi_trips"):
+		spark.sql("DROP TABLE integrated_taxi_trips")
 	enriched_df.write.format("delta").mode("overwrite").saveAsTable("integrated_taxi_trips")

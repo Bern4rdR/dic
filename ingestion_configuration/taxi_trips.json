@@ -43,6 +43,13 @@
       "type": "float",
       "nullable": true,
       "description": "Fare amount"
+    },
+    {
+      "source": "trip_distance",
+      "name": "trip_distance",
+      "type": "float",
+      "nullable": true,
+      "description": "Trip distance"
     }
   ]
 }
