@@ -86,4 +86,4 @@ if __name__ == "__main__":
 
 	enriched_df.printSchema()
 	enriched_df.show()
-	# enriched_df.write.format("delta").mode("overwrite").save(str(WAREHOUSE_DIR / "integrated_taxi_trips"))
+	enriched_df.write.format("delta").mode("overwrite").saveAsTable("integrated_taxi_trips")
