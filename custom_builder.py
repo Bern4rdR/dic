@@ -1,8 +1,22 @@
 import pyspark
 
+from pathlib import Path
 
-WAREHOUSE_DIR = "spark_project/spark-warehouse"
-METASTORE_DIR = "spark_project/metastore_db"
+from pathlib import Path
+
+def find_project_root() -> Path:
+    path = Path(__file__).resolve()
+
+    for parent in [path, *path.parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent
+
+    raise RuntimeError("Could not find project root")
+
+PROJECT_ROOT = find_project_root()
+
+WAREHOUSE_DIR = PROJECT_ROOT / "spark_project/spark-warehouse"
+METASTORE_DIR = PROJECT_ROOT / "spark_project/metastore_db"
 
 builder = (
     pyspark.sql.SparkSession.builder

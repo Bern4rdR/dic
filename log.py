@@ -6,9 +6,24 @@ from contextlib import contextmanager
 from datetime import datetime
 
 
-# Directory where logs will be stored
-LOG_DIR = Path("logs")
-LOG_DIR.mkdir(exist_ok=True)
+# create log directory at absolute path from project root, path.cwd() is not reliable when importing this module from other locations
+LOG_DIR = Path(__file__).resolve().parent / "logs"
+
+
+def find_project_root() -> Path:
+    path = Path(__file__).resolve()
+
+    for parent in [path, *path.parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent
+
+    raise RuntimeError("Could not find project root")
+
+PROJECT_ROOT = find_project_root()
+
+# Create logs directory at the root of the project if it doesn't exist
+if not LOG_DIR.exists():
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # Create a unique ID for this execution
