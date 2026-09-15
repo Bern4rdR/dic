@@ -50,18 +50,18 @@ def enrich(trips_df: DataFrame, pu_zone: DataFrame, do_zone: DataFrame, aq_df: D
 			"left",
 		)
 
-		# air quality at pu_datetime
-		.join(
-			aq_df.alias("aq"),
-			(F.date_trunc("hour", F.col("t.pu_datetime")) == F.col("aq.datetime"))
-			& (F.col("pu.pu_county") == F.col("aq.county")),
-			"left",
-		)
-		# weather conditions at pu_datetime
-		.join(
-			weather_df.alias("w"),
-			F.date_trunc("hour", F.col("t.pu_datetime")) == F.col("w.datetime")
-		)
+		# # air quality at pu_datetime
+		# .join(
+		# 	aq_df.alias("aq"),
+		# 	(F.date_trunc("hour", F.col("t.pu_datetime")) == F.col("aq.datetime"))
+		# 	& (F.col("pu.pu_county") == F.col("aq.county")),
+		# 	"left",
+		# )
+		# # weather conditions at pu_datetime
+		# .join(
+		# 	weather_df.alias("w"),
+		# 	F.date_trunc("hour", F.col("t.pu_datetime")) == F.col("w.datetime")
+		# # )
 		.drop(
 			# taxi_trips
 			F.col("t.pu_location_id"),
@@ -69,16 +69,18 @@ def enrich(trips_df: DataFrame, pu_zone: DataFrame, do_zone: DataFrame, aq_df: D
 			# taxi_zone_lookup
 			F.col("pu.pu_location_id"),
 			F.col("do.do_location_id"),
-			# air_quality
-			F.col("aq.datetime"),
-			F.col("aq.county"),
-			# weather
-			F.col("w.datetime")
+			# # air_quality
+			# F.col("aq.datetime"),
+			# F.col("aq.county"),
+			# # weather
+			# F.col("w.datetime")
 		)
 	)
 
 if __name__ == "__main__":
 	spark = configure_spark_with_delta_pip(builder).getOrCreate()
+	print(f'current database: {spark.catalog.currentDatabase()}')
+	print(f'spark tables: {spark.catalog.listTables()}')
 
 	trips_df, pu_zone, do_zone, aq_df, weather_df = load_dfs(spark)
 
@@ -87,6 +89,6 @@ if __name__ == "__main__":
 	enriched_df.printSchema()
 	enriched_df.show()
 
-	if spark.catalog.tableExists("integrated_taxi_trips"):
-		spark.sql("DROP TABLE integrated_taxi_trips")
+
+	spark.sql("DROP TABLE IF EXISTS integrated_taxi_trips")
 	enriched_df.write.format("delta").mode("overwrite").saveAsTable("integrated_taxi_trips")
