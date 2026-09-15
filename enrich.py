@@ -29,7 +29,25 @@ def load_dfs(spark: SparkSession):
 		F.col("county").alias("do_county"),
 	)
 
-	return trips_df, pu_zone, do_zone, aq_df, weather_df
+	
+	
+	from pyspark.sql.window import Window
+
+	aq_filtered = (
+		aq_df
+		.withColumn("hour", F.date_trunc("hour", F.col("datetime")))
+		.withColumn(
+			"rn",
+			F.row_number().over(
+				Window.partitionBy("hour").orderBy("datetime")
+			)
+		)
+		.filter(F.col("rn") == 1)
+		.drop("rn", "datetime")
+		.withColumnRenamed("hour", "datetime")
+	)
+
+	return trips_df, pu_zone, do_zone, aq_filtered, weather_df
 
 
 def enrich(trips_df: DataFrame, pu_zone: DataFrame, do_zone: DataFrame, aq_df: DataFrame, weather_df: DataFrame):
@@ -46,22 +64,23 @@ def enrich(trips_df: DataFrame, pu_zone: DataFrame, do_zone: DataFrame, aq_df: D
 		# do_location_id -> county, zone
 		.join(
 			do_zone.alias("do"),
-			F.col("t.do_location_id") == F.col("do.do_location_id"),
+			(F.col("t.do_location_id") == F.col("do.do_location_id")),
 			"left",
 		)
 
-		# # air quality at pu_datetime
-		# .join(
-		# 	aq_df.alias("aq"),
-		# 	(F.date_trunc("hour", F.col("t.pu_datetime")) == F.col("aq.datetime"))
-		# 	& (F.col("pu.pu_county") == F.col("aq.county")),
-		# 	"left",
-		# )
-		# # weather conditions at pu_datetime
-		# .join(
-		# 	weather_df.alias("w"),
-		# 	F.date_trunc("hour", F.col("t.pu_datetime")) == F.col("w.datetime")
-		# # )
+		# air quality at pu_datetime
+		.join(
+			aq_df.alias("aq"),
+			(F.date_trunc("hour", F.col("t.pu_datetime")) == F.col("aq.datetime"))
+			& (F.col("pu.pu_county") == F.col("aq.county")),
+			"left",
+		)
+		# weather conditions at pu_datetime
+		.join(
+			weather_df.alias("w"),
+			F.date_trunc("hour", F.col("t.pu_datetime")) == F.col("w.datetime"),
+			"left",
+		)
 		.drop(
 			# taxi_trips
 			F.col("t.pu_location_id"),
@@ -69,11 +88,11 @@ def enrich(trips_df: DataFrame, pu_zone: DataFrame, do_zone: DataFrame, aq_df: D
 			# taxi_zone_lookup
 			F.col("pu.pu_location_id"),
 			F.col("do.do_location_id"),
-			# # air_quality
-			# F.col("aq.datetime"),
-			# F.col("aq.county"),
-			# # weather
-			# F.col("w.datetime")
+			# air_quality
+			F.col("aq.datetime"),
+			F.col("aq.county"),
+			# weather
+			F.col("w.datetime")
 		)
 	)
 
