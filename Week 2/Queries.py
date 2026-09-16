@@ -1,7 +1,7 @@
 
-def query_2_1():
-    return """
-        SELECT
+def query_2_1(broadcast=False):
+    query = f"""
+        SELECT {'/*+ BROADCAST(default.taxi_zone_lookup) */' if broadcast else ''}
             zone AS pu_zone,
             month(pu_datetime) AS month, 
             COUNT(*) AS row_count
@@ -10,10 +10,11 @@ def query_2_1():
         ON taxi_trips.pu_location_id = taxi_zone_lookup.location_id
         GROUP BY pu_zone, month
     """
+    return query
 
-def query_2_2():
-    return """
-    SELECT
+def query_2_2(broadcast=False):
+    query = f"""
+    SELECT {'/*+ BROADCAST(w) */' if broadcast else ''}
         CASE
             WHEN prcp > 0 THEN 'greater_than_0'
             ELSE 'zero_or_null'
@@ -29,13 +30,15 @@ def query_2_2():
                 ELSE 'zero_or_null'
         END;
     """
+    return query
 
-def query_2_3():
-    return """
-    SELECT measurement, COUNT(county) AS trips 
-    FROM (taxi_trips AS t
+def query_2_3(broadcast=False):
+    query = f"""
+    SELECT {'/*+ BROADCAST(tzl), BROADCAST(aq) */' if broadcast else ''}
+    measurement, COUNT(county) AS trips
+    FROM taxi_trips AS t
     LEFT JOIN taxi_zone_lookup AS tzl
-    ON t.pu_location_id = tzl.location_id) t
+    ON t.pu_location_id = tzl.location_id
     LEFT JOIN (
         SELECT *
         FROM (
@@ -50,8 +53,9 @@ def query_2_3():
             FROM air_quality r
         )
         WHERE rn = 1
-    ) aq
+    ) AS aq
     ON date_trunc('hour', pu_datetime) = hr_datetime AND county = aq_county
     GROUP BY measurement
     ORDER BY measurement, trips
     """
+    return query
