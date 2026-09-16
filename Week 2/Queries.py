@@ -59,3 +59,27 @@ def query_2_3(broadcast=False):
     ORDER BY measurement, trips
     """
     return query
+
+# TODO Query 2.4
+def query_2_4():
+    query = f""""""
+    return query
+
+def query_2_5():
+    query = f"""
+SELECT date_format(pu_datetime, 'EEE') AS day, hour(pu_datetime) AS hour, COUNT(*) AS trips
+    FROM taxi_trips
+    GROUP BY hour, day
+    ORDER BY day, trips DESC
+"""
+    return query
+
+
+def query_2_6():
+    query = f"""
+SELECT date_format(pu_datetime, 'MMM') AS month, COUNT(*) AS trips
+    FROM taxi_trips
+    GROUP BY month
+    ORDER BY month
+"""
+    return query
