@@ -3,7 +3,7 @@ def query_2_1(broadcast=False):
     query = f"""
         SELECT {'/*+ BROADCAST(default.taxi_zone_lookup) */' if broadcast else ''}
             zone AS pu_zone,
-            month(pu_datetime) AS month, 
+            month(pu_datetime) AS month,
             COUNT(*) AS row_count
         FROM default.taxi_trips
         LEFT JOIN default.taxi_zone_lookup
@@ -62,7 +62,45 @@ def query_2_3(broadcast=False):
 
 # TODO Query 2.4
 def query_2_4():
-    query = f""""""
+    query = f"""
+	   	WITH
+	        trips AS (
+	            SELECT DATE_TRUNC('hour', pu_datetime) AS hour, county, COUNT(*) AS trip_count
+	            FROM taxi_trips
+	            JOIN taxi_zone_lookup
+	                ON pu_location_id = location_id
+	            WHERE county IS NOT NULL
+	            GROUP BY DATE_TRUNC('hour', pu_datetime), county
+	        ),
+	        weather_cat AS (
+	            SELECT DATE_TRUNC('hour', datetime) AS hour,
+	                CASE
+	                    WHEN prcp > 3 THEN 'rain'
+	                    WHEN temp > 25 THEN 'heatwave'
+	                    WHEN temp < 0 THEN 'cold'
+	                    WHEN rhum > 65 THEN 'humid'
+	                    WHEN rhum < 25 THEN 'dry'
+	                    WHEN wspd > 8 THEN 'stormy'
+	                    ELSE 'moderate'
+	                END AS weather_cond
+	            FROM weather
+	        ),
+	        weather_trips AS (
+	            SELECT t.county, t.hour, t.trip_count, w.weather_cond
+	            FROM trips AS t
+	            INNER JOIN weather_cat AS w
+	                ON t.hour = w.hour
+	        ),
+	        demand AS (
+	            SELECT county, weather_cond, COUNT(*) AS weather_hours, SUM(trip_count) AS total_trips
+	            FROM weather_trips
+	            GROUP  BY county, weather_cond
+	        )
+	    SELECT county, weather_cond, weather_hours, ROUND(CAST(total_trips AS DOUBLE) / NULLIF(weather_hours, 0), 2) AS trips_per_hour
+	    FROM demand
+	    ORDER BY county, trips_per_hour
+	    ;
+    """
     return query
 
 def query_2_5():
