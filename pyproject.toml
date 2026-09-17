@@ -8,6 +8,7 @@ dependencies = [
     "delta-spark>=4.4.0",
     "gdown>=6.1.0",
     "ipykernel>=7.3.0",
+    "jupyterlab>=4.6.3",
     "numpy>=2.4.6",
     "pandas>=2.0,<3.0",
     "pyarrow>=25.0.1",
