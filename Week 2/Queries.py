@@ -60,12 +60,11 @@ def query_2_3(broadcast=False):
     """
     return query
 
-# TODO Query 2.4
-def query_2_4():
+def query_2_4(broadcast=False):
     query = f"""
 	   	WITH
 	        trips AS (
-	            SELECT DATE_TRUNC('hour', pu_datetime) AS hour, county, COUNT(*) AS trip_count
+	            SELECT {'/*+ BROADCAST(taxi_zone_lookup) */' if broadcast else ''} DATE_TRUNC('hour', pu_datetime) AS hour, county, COUNT(*) AS trip_count
 	            FROM taxi_trips
 	            JOIN taxi_zone_lookup
 	                ON pu_location_id = location_id
@@ -86,7 +85,7 @@ def query_2_4():
 	            FROM weather
 	        ),
 	        weather_trips AS (
-	            SELECT t.county, t.hour, t.trip_count, w.weather_cond
+	            SELECT {'/*+ BROADCAST(w) */' if broadcast else ''} t.county, t.hour, t.trip_count, w.weather_cond
 	            FROM trips AS t
 	            INNER JOIN weather_cat AS w
 	                ON t.hour = w.hour
