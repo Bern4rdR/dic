@@ -29,6 +29,7 @@ def daily_county_demand(spark: SparkSession) -> DataFrame:
 	    ORDER BY trip_date, pu_county;
 	"""), "integrated_taxi_trips", "1.1.0")
 
+# Corresponds to query_2_4 in Queries.py?, TODO: Should do query_2_4() function call
 def weather_impact_demand(spark: SparkSession) -> DataFrame:
 	# impact of weather on taxi trips
 	return _add_metadata(spark.sql("""
@@ -57,6 +58,7 @@ def weather_impact_demand(spark: SparkSession) -> DataFrame:
 		    ORDER BY pu_county, trips_per_hour
 	"""), "integrated_taxi_trips", "1.0.0")
 
+# Corresponds to query_2_5 in Queries.py, TODO: Should do query_2_5() function call
 def week_day_demand(spark: SparkSession) -> DataFrame:
 	# number of trips by day of the week
 	return _add_metadata(spark.sql("""
