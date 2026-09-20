@@ -47,3 +47,7 @@ uv run enrich.py
 **5. Benchmark partitioned tables**
 
 The code for creating and benchmarking the two partitioned versions of `taxi_trips` is available in `task_6.ipynb`. All sections should be run in sequence with possible exception of the last one, the 'Drop partitioned tables' section, which is useful for returing to the clean previous state before benchmarking. 
+
+# Week 2 Analysis
+
+The implementations for all tasks in Week 2 can be seen in the Jupyter Notebooks in the `Week 2` folder. 
