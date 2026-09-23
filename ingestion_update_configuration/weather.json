@@ -1,0 +1,76 @@
+{
+  "source": "updates/weather_update/*.csv",
+  "name": "weather",
+  "columns": [
+    {
+      "source": ["year", "month", "day", "hour"],
+      "name": "datetime",
+      "type": "timestamp",
+      "nullable": false,
+      "description": "Date and Time of the measurement"
+    },
+    {
+      "source": "temp",
+      "name": "temp",
+      "type": "float",
+      "nullable": true,
+      "description": "Temperature"
+    },
+    {
+      "source": "rhum",
+      "name": "rhum",
+      "type": "int",
+      "nullable": true,
+      "description": "Relative humidity"
+    },
+    {
+      "source": "prcp",
+      "name": "prcp",
+      "type": "float",
+      "nullable": true,
+      "description": "Precipitation"
+    },
+    {
+      "source": "snwd",
+      "name": "snwd",
+      "type": "float",
+      "nullable": true,
+      "description": "Snow depth"
+    },
+    {
+      "source": "wdir",
+      "name": "wdir",
+      "type": "int",
+      "nullable": true,
+      "description": "Wind direction"
+    },
+    {
+      "source": "wspd",
+      "name": "wspd",
+      "type": "float",
+      "nullable": true,
+      "description": "Wind speed"
+    },
+    {
+      "source": "cldc",
+      "name": "cldc",
+      "type": "int",
+      "nullable": true,
+      "description": "Cloud cover"
+    },
+    {
+      "source": "coco",
+      "name": "coco",
+      "type": "int",
+      "nullable": true,
+      "description": "General weather condition"
+    },
+    {
+      "source": "humidity",
+      "name": "humidity",
+      "type": "int",
+      "nullable": true,
+      "description": "Humidity"
+    }
+  ]
+}

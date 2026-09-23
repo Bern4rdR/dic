@@ -1,0 +1,34 @@
+{
+  "source": "updates/air_quality_update/*.csv",
+  "name": "air_quality",
+  "columns": [
+    {
+      "source": "County Name",
+      "name": "county",
+      "type": "string",
+      "nullable": false,
+      "description": "County Name"
+    },
+    {
+      "source": ["Date Local", "Time Local"],
+      "name": "datetime",
+      "type": "timestamp",
+      "nullable": false,
+      "description": "Date and Time of the measurement"
+    },
+    {
+      "source": "Sample Measurement",
+      "name": "measurement",
+      "type": "float",
+      "nullable": true,
+      "description": "Measurement value"
+    },
+    {
+      "source": "aqi",
+      "name": "aqi",
+      "type": "float",
+      "nullable": true,
+      "description": "Air Quality Index"
+    }
+  ]
+}

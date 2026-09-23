@@ -13,6 +13,18 @@ from log import *
 DB_SRC = "data"
 
 
+def find_project_root() -> Path:
+    path = Path(__file__).resolve()
+
+    for parent in [path, *path.parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent
+
+    raise RuntimeError("Could not find project root")
+
+PROJECT_ROOT = find_project_root()
+
+
 def ingest(spark, conf) -> tuple[DataFrame, Any]:
     # 1. Load the configuration and dataframe
     with open(conf) as f:
@@ -23,12 +35,12 @@ def ingest(spark, conf) -> tuple[DataFrame, Any]:
         df = spark.read \
             .option("header", True) \
             .option("inferSchema", False) \
-            .parquet(config["source"])
+            .parquet(f"{PROJECT_ROOT / config['source']}")
     else:
         df = spark.read \
             .option("header", True) \
             .option("inferSchema", False) \
-            .csv(config["source"])
+            .csv(f"{PROJECT_ROOT / config['source']}")
 
     return df, config
 
@@ -46,12 +58,12 @@ def transform(df, config) -> DataFrame:
 
         if isinstance(source, list):
             if data_type == "timestamp":
-                if config["source"] == f"{DB_SRC}/air_quality/hourly_88101_2024.csv":
+                if config["source"] == f"{DB_SRC}/air_quality/hourly_88101_2024.csv" or config["source"] == f"updates/air_quality_update/*.csv":
                     expr = F.to_timestamp(
                         F.concat_ws(" ", *[F.col(c) for c in source]),
                         "yyyy-MM-dd HH:mm"
                     ).alias(name)
-                elif config["source"] == f"{DB_SRC}/weather.csv":
+                elif config["source"] == f"{DB_SRC}/weather.csv" or config["source"] == f"updates/weather_update/*.csv":
                     expr = F.to_timestamp(
                         F.concat_ws(
                             " ",
