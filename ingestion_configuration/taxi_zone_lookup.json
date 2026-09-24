@@ -1,6 +1,8 @@
 {
   "source": "data/taxi_zone_lookup.csv",
   "name": "taxi_zone_lookup",
+  "primary_keys": ["location_id"],
+  "foreign_keys": ["location_id", "county"],
   "columns": [
     {
       "source": "LocationID",

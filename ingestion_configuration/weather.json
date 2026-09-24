@@ -1,6 +1,8 @@
 {
   "source": "data/weather.csv",
   "name": "weather",
+  "primary_keys": ["datetime"],
+  "foreign_keys": ["datetime"],
   "columns": [
     {
       "source": ["year", "month", "day", "hour"],
@@ -21,6 +23,7 @@
       "name": "rhum",
       "type": "int",
       "nullable": true,
+      "expr": "0 <= rhum AND rhum <= 100",
       "description": "Relative humidity"
     },
     {
@@ -28,6 +31,7 @@
       "name": "prcp",
       "type": "float",
       "nullable": true,
+      "expr": "prcp >= 0",
       "description": "Precipitation"
     },
     {
@@ -35,6 +39,7 @@
       "name": "snwd",
       "type": "float",
       "nullable": true,
+      "expr": "snwd >= 0",
       "description": "Snow depth"
     },
     {
@@ -42,6 +47,7 @@
       "name": "wdir",
       "type": "int",
       "nullable": true,
+      "expr": "0 <= wdir AND wdir <= 360",
       "description": "Wind direction"
     },
     {
@@ -49,6 +55,7 @@
       "name": "wspd",
       "type": "float",
       "nullable": true,
+      "expr": "wspd >= 0",
       "description": "Wind speed"
     },
     {
@@ -56,6 +63,7 @@
       "name": "cldc",
       "type": "int",
       "nullable": true,
+      "expr": "0 <= cldc AND cldc <= 100",
       "description": "Cloud cover"
     },
     {

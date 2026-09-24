@@ -1,6 +1,9 @@
 {
   "source": "data/yellow_tripdata_1.parquet",
   "name": "taxi_trips",
+  "primary_keys": ["pu_datetime", "do_datetime", "pu_location_id", "do_location_id"],
+  "foreign_keys": ["pu_location_id", "do_location_id"],
+  "row_expr": ["pu_datetime <= do_datetime"],
   "columns": [
      {
       "source": null,
@@ -42,6 +45,7 @@
       "name": "fare_amount",
       "type": "float",
       "nullable": true,
+      "expr": "fare_amount >= 0",
       "description": "Fare amount"
     },
     {
@@ -49,6 +53,7 @@
       "name": "trip_distance",
       "type": "float",
       "nullable": true,
+      "expr": "trip_distance >= 0",
       "description": "Trip distance"
     }
   ]
