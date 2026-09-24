@@ -10,11 +10,12 @@ from log import *
 TABLE_RULES_SRC = Path("./ingestion_configuration")
 WAREHOUSE_DIR = Path("./spark_project/spark-warehouse")
 
-def validate_table(df, rules):
+def validate_table(df: DataFrame, rules):
+	schema_issues = []
 	# check table not empty
 	if not df.count() > 0:
 		# print("✗ Table is empty")
-		raise Exception("✗ Table is empty")
+		schema_issues.append("✗ Table is empty")
 	else:
 		print("✓ table not empty")
 
@@ -23,14 +24,14 @@ def validate_table(df, rules):
 		if not col["nullable"] and col["source"] is not None:
 			if df.filter(df[col["name"]].isNull()).count() > 0:
 				# print(f"✗ Column {col['name']} contains null values")
-				raise Exception(f"✗ Column {col['name']} contains null values")
+				schema_issues.append(f"✗ Column {col['name']} contains null values")
 	print("✓ non-nullable columns validated")
 
 	# verify expected columns
 	expected_cols = set([col["name"] for col in rules["columns"] if col["source"] is not None])
-	if set(df.columns) != expected_cols:
+	if not set(df.columns).issuperset(expected_cols):
 		# print(f"✗ Columns do not match expected columns: {set(df.columns)} vs {expected_cols}")
-		raise Exception("✗ Columns do not match expected columns: {set(df.columns)} vs {expected_cols}")
+		schema_issues.append(f"✗ Columns do not match expected columns: {set(df.columns)} vs {expected_cols}")
 	else:
 		print("✓ found all columns")
 
@@ -41,66 +42,64 @@ def validate_table(df, rules):
 		col_type = dict(df.dtypes)[col["name"]]
 		if col_type != col["type"]:
 			# print(f"✗ Column {col['name']} has incorrect data type: {col_type}")
-			raise Exception(f"✗ Column {col['name']} has incorrect data type: {col_type}")
+			schema_issues.append(f"✗ Column {col['name']} has incorrect data type: {col_type}")
 	print("✓ data type validated")
 
+	return schema_issues
 
-def filter_table(df, table_name) -> DataFrame:
-	valid_counties = ["Bronx", "Queens", "Manhattan", "Staten Island", "Brooklyn"]
+def filter_table(dt: DeltaTable, rules):
+	del_cond = []
+	# Note: conditions in config are assumed to be 'keep' conditions for readability, negate for deletion
 
-	# verify data range (real date / non-negative number / etc)
-	match table_name:
-		case "air_quality":
-			return df.filter(F.col("county").isin(valid_counties))
+	# attribute values range
+	for col in rules["columns"]:
+		if "expr" in col:
+			if col["nullable"]:
+				del_cond.append(f"(NOT ({col['expr']}) AND {col['name']} IS NOT NULL)") # del if value violates expr if exists
+			else:
+				del_cond.append(f"(NOT ({col['expr']}) OR {col['name']} IS NULL)") # del if value violates expr or is null
 
-		case "taxi_trips":
-			return df.filter(
-                F.col("pu_datetime").isNotNull()
-                & F.col("do_datetime").isNotNull()
-                & (F.col("pu_datetime") <= F.col("do_datetime"))
-            )
+	# inter-attribute relations
+	if "row_expr" in rules:
+		for row_expr in rules["row_expr"]:
+			del_cond.append(f"NOT ({row_expr})")
 
-		case "taxi_zone_lookup":
-			return df.filter(F.col("county").isin(valid_counties))
+	# reference records
+	for fk in rules["foreign_keys"]:
+		del_cond.append(f"{fk} IS NULL")
 
-		case "weather":
-			return df \
-				.filter(F.col("rhum").between(0, 100) | F.col("rhum").isNull()) \
-				.filter(F.col("cldc").between(0, 100) | F.col("cldc").isNull()) \
-				.filter(F.col("wdir").between(0, 360) | F.col("wdir").isNull()) \
-				.filter((F.col("wspd") >= 0) | F.col("wspd").isNull()) \
-				.filter((F.col("prcp") >= 0) | F.col("prcp").isNull()) \
-				.filter((F.col("snwd") >= 0) | F.col("snwd").isNull())
+	# remove rows
+	if del_cond:
+		del_comm = " OR ".join(del_cond)
+		dt.delete(del_comm)
 
-		case _:
-			raise Exception(f"✗ Unknown table: '{table_name}'")
+		print(f"Table {rules['name']} cleaned")
 
 
 if __name__ == "__main__":
 	from custom_builder import builder
-	# TODO: change so validation occurs after ingestion and before transformation.
-	# TODO: also change so that so that validation and filtering occurs on dataframes connected to tables with no overwrites, just updates that can be seen in deltalog
 	spark = configure_spark_with_delta_pip(builder).getOrCreate()
 	spark.sparkContext.setLogLevel("ERROR")
 
 	for rule_file in os.listdir(TABLE_RULES_SRC):
 		with open(Path(TABLE_RULES_SRC / rule_file), "r") as f:
 			rules = json.load(f)
-			df = spark.read.format("delta").load(str(WAREHOUSE_DIR / rules['name']))
 
-			print(f"\n{'⠛'*80}\nValidating {rules['name']}...")
-			with log_step(f"validate_data") as info:
-				validate_table(df, rules)
-				filtered_df = filter_table(df, rules["name"])
-				row_diff = df.count() - filtered_df.count()
-				info["removed_rows"] = row_diff
+		table_path = str(WAREHOUSE_DIR / rules['name'])
+		df = spark.read.format("delta").load(table_path)
 
+		print(f"\n{'⠛'*80}\nValidating {rules['name']}...")
+		with log_step(f"validate_data"):
 
-			print(f"{row_diff} rows removed ({filtered_df.count()} remaining)")
+			if schema_issues := validate_table(df, rules):
+				print("\n".join(schema_issues))
 
-			# replace existing delta table with filtered data
-			filtered_df.write \
-				.format("delta") \
-				.mode("overwrite") \
-				.option("overwriteSchema", "true") \
-				.save(f"{WAREHOUSE_DIR}/{rules['name']}")
+			dt = DeltaTable.forPath(spark, table_path)
+			filter_table(dt, rules)
+
+			# remove duplicate rows
+			if pk_cols := rules["primary_keys"]:
+				df = dt.toDF()
+				if df.groupBy(pk_cols).count().filter("count > 1").count() > 0: # only rewrite if deplicates exist
+					df = df.dropDuplicates(pk_cols)
+					df.write.format("delta").mode("overwrite").save(table_path)
