@@ -191,20 +191,20 @@ def update_pipeline_execution(spark: SparkSession, new_df, table_name: str):
     	with open(update_config, "r") as f:
             rules = json.load(f)
 
-        if base_config.exists():
-            with open(base_config, "r") as f:
-            	base_rules = json.load(f)
+            if base_config.exists():
+                with open(base_config, "r") as bf:
+                    base_rules = json.load(bf)
 
-			# get table rules from base config
-            for rule_key in ["primary_keys", "foreign_keys", "row_expr"]:
-            	if rule_key in base_rules and rule_key not in rules:
-             		rules[rule_key] = base_rules[rule_key]
+                # get table rules from base config
+                for rule_key in ["primary_keys", "foreign_keys", "row_expr"]:
+                    if rule_key in base_rules and rule_key not in rules:
+                        rules[rule_key] = base_rules[rule_key]
 
-            # get attribute rules from base config
-            for attr in rules["columns"]:
-            	base_attr = base_rules["columns"][attr]
-                if "expr" in base_attr and "expr" not in attr:
-             		attr["expr"] = base_attr["expr"]
+                # get attribute rules from base config
+                for attr in rules["columns"]:
+                    base_attr = base_rules["columns"][attr]
+                    if "expr" in base_attr and "expr" not in attr:
+                        attr["expr"] = base_attr["expr"]
 
     # validate data
     if rules:
