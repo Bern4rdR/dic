@@ -1,6 +1,8 @@
+from datetime import datetime
 import hashlib
 import json
 
+from delta import DeltaTable
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
@@ -130,3 +132,143 @@ def get_current_schema_version(spark, table_name: str):
         return None
 
     return current_schema_version[0]["schema_version"]
+
+def initialize_pipeline_monitor_table(spark):
+    # Initialize the pipeline monitor table if it doesn't exist.
+    spark.sql("""
+        CREATE TABLE IF NOT EXISTS pipeline_monitor (
+            execution_start_time TIMESTAMP,
+            execution_end_time TIMESTAMP,
+            processed_records LONG,
+            inserted_records LONG,
+            rejected_records LONG,
+            validation_failures LONG,
+            table_name STRING,
+            schema_version LONG, 
+            delta_version LONG
+        )
+        USING DELTA
+    """)
+
+def update_pipeline_execution(spark: SparkSession, new_df, table_name: str):
+    """
+    Perform update pipeline execution and update the pipeline monitor table with the latest execution details.
+    Args:
+        new_df: The new DataFrame to be merged into the target Delta table. Retrieved from csv or parquet file.
+    """
+    # Get the current timestamp for the start of the pipeline execution so that it is easily added to the pipeline monitor table. F.current_timestamp() is not what we want here because it will be evaluated at the time of writing to the table, not at the time of execution.
+    pipeline_start_time = datetime.now()
+
+    processed_records = new_df.count()
+    
+    # TODO: validate data, also return number of validation failures
+    # validate(new_df)
+    validation_failures = None # TODO: Should be a real count of validation failures
+    
+
+    target = DeltaTable.forName(spark, table_name)
+    target_df = spark.table(table_name)
+
+    # Only compare columns that currently exist in the target
+    compare_cols = target_df.columns
+
+    # Null-safe equality for every column
+    condition = " AND ".join(
+        [f"t.`{c}` <=> s.`{c}`" for c in compare_cols]
+    )
+
+    ( # Merge the new DataFrame into the target Delta table, only inserts non-duplicate rows
+        target.alias("t")
+        .merge(
+            new_df.alias("s"),
+            condition
+        )
+        .whenNotMatchedInsertAll()
+        .execute()
+    )
+
+    pipeline_end_time = datetime.now()
+
+    
+    initialize_pipeline_monitor_table(spark)
+
+    # get the latest delta version noted in pipeline_monitor table for this table_name
+    latest_delta_version = (
+        spark.table("pipeline_monitor")
+        .filter(F.col("table_name") == table_name)
+        .select("delta_version")
+        .orderBy(F.col("delta_version").desc())
+        .limit(1)
+        .collect()
+    )
+    # if there is no latest delta version, set it to -1
+    if not latest_delta_version:
+        latest_delta_version = [{"delta_version": -1}]
+
+    latest_delta_version[0]["delta_version"]
+
+    # only update the pipeline monitor table if the delta version has changed for the target table (i.e something has changed)
+    if target.history(1).select("version").first()["version"] > latest_delta_version[0]["delta_version"]:
+        print(f"Did update to Delta table {table_name}")
+
+        # Update the pipeline monitor table with the latest execution details.
+
+        current_schema_version = get_current_schema_version(spark, table_name)
+
+        if current_schema_version is None:
+            raise ValueError(f"No schema version found for table {table_name}")
+
+        # Get the number of records processed, inserted, and rejected
+
+        
+        metrics = target.history(1).select("operationMetrics").first()
+        
+        
+
+        # get numTargetRowsInserted from operationMetrics, metrics is a Row object, so we need to access the dictionary inside it
+        metrics = metrics.asDict()["operationMetrics"]
+
+        print(f"Operation metrics: {metrics}")
+
+        inserted_rows = int(metrics.get("numTargetRowsInserted", 0))
+        rejected_rows = processed_records - inserted_rows
+
+        row = [(
+            pipeline_start_time,
+            pipeline_end_time,
+            processed_records,
+            inserted_rows,
+            rejected_rows,
+            validation_failures,
+            table_name,
+            current_schema_version,
+            target.history(1).select("version").first()["version"]
+        )]
+
+        df = (
+            spark.createDataFrame(
+                row,
+                """
+                execution_start_time TIMESTAMP,
+                execution_end_time TIMESTAMP,
+                processed_records LONG,
+                inserted_records LONG,
+                rejected_records LONG,
+                validation_failures LONG,
+                table_name STRING,
+                schema_version LONG,
+                delta_version LONG
+                """
+            )
+        )
+
+        df.write.format("delta").mode("append").saveAsTable(
+            "pipeline_monitor"
+        )
+
+def read_pipeline_monitor(spark: SparkSession):
+    """
+    Read the pipeline monitor table and return a DataFrame.
+    """
+    initialize_pipeline_monitor_table(spark)
+    return spark.table("pipeline_monitor")
