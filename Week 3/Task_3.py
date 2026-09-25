@@ -1,7 +1,9 @@
 from datetime import datetime
 import hashlib
 import json
+import sys
 
+from pathlib import Path
 from delta import DeltaTable
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
@@ -14,6 +16,10 @@ from pyspark.sql.types import (
 )
 
 import hashlib
+
+SRC_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(SRC_DIR))
+from validation import validate_table, filter_table
 
 
 SCHEMA_REGISTRY = "schema_versions"
@@ -140,7 +146,7 @@ def initialize_pipeline_monitor_table(spark):
             rejected_records LONG,
             validation_failures LONG,
             table_name STRING,
-            schema_version LONG, 
+            schema_version LONG,
             delta_version LONG
         )
         USING DELTA
@@ -153,11 +159,11 @@ def update_pipeline_execution(spark: SparkSession, new_df, table_name: str):
         new_df: The new DataFrame to be merged into the target Delta table. Retrieved from csv or parquet file.
     """
     processed_records = new_df.count()
-    
+
     # ------------------------------------------
     # ------ Merge operation setup ------
     # ------------------------------------------
-    
+
     target = DeltaTable.forName(spark, table_name)
     target_df = spark.table(table_name)
 
@@ -176,9 +182,35 @@ def update_pipeline_execution(spark: SparkSession, new_df, table_name: str):
     # ------------- Validation -----------------
     # ------------------------------------------
 
-    # TODO: validate data, also return number of validation failures
-    # validate(new_df)
-    validation_failures = None # TODO: Should be a real count of validation failures
+    base_config = SRC_DIR.parent / "ingestion_configuration" / f"{table_name}.json"
+    update_config = SRC_DIR.parent / "ingestion_update_configuration" / f"{table_name}.json"
+
+	# load rules from config
+    rules = {}
+    if update_config.exists():
+    	with open(update_config, "r") as f:
+            rules = json.load(f)
+
+        if base_config.exists():
+            with open(base_config, "r") as f:
+            	base_rules = json.load(f)
+
+			# get table rules from base config
+            for rule_key in ["primary_keys", "foreign_keys", "row_expr"]:
+            	if rule_key in base_rules and rule_key not in rules:
+             		rules[rule_key] = base_rules[rule_key]
+
+            # get attribute rules from base config
+            for attr in rules["columns"]:
+            	base_attr = base_rules["columns"][attr]
+                if "expr" in base_attr and "expr" not in attr:
+             		attr["expr"] = base_attr["expr"]
+
+    # validate data
+    if rules:
+        schema_issues = validate_table(new_df, rules)
+        if schema_issues:
+            print(f"[{table_name}] warnings:\n  " + "\n  ".join(schema_issues))
 
     # ------------------------------------------
     # ------ Merge operation ------
@@ -195,7 +227,7 @@ def update_pipeline_execution(spark: SparkSession, new_df, table_name: str):
     )
 
     pipeline_end_time = datetime.now()
-    
+
     # ------------------------------------------
     # ----------- Pipeline monitoring ----------
     # ------------------------------------------
@@ -217,8 +249,10 @@ def update_pipeline_execution(spark: SparkSession, new_df, table_name: str):
 
     latest_delta_version[0]["delta_version"]
 
+    last_logged_version = latest_delta_version[0]["delta_version"]
+    current_target_version = target.history(1).select("version").first()["version"]
     # only update the pipeline monitor table if the delta version has changed for the target table (i.e something has changed)
-    if target.history(1).select("version").first()["version"] > latest_delta_version[0]["delta_version"]:
+    if current_target_version > last_logged_version:
         print(f"Did update to Delta table {table_name}")
 
         # Update the pipeline monitor table with the latest execution details.
@@ -229,7 +263,7 @@ def update_pipeline_execution(spark: SparkSession, new_df, table_name: str):
             raise ValueError(f"No schema version found for table {table_name}")
 
         metrics = target.history(1).select("operationMetrics").first()
-        
+
         # get numTargetRowsInserted from operationMetrics, metrics is a Row object, so we need to access the dictionary inside it
         metrics = metrics.asDict()["operationMetrics"]
 
@@ -237,6 +271,10 @@ def update_pipeline_execution(spark: SparkSession, new_df, table_name: str):
 
         inserted_rows = int(metrics.get("numTargetRowsInserted", 0))
         rejected_rows = processed_records - inserted_rows
+
+		# count rows that failed to validate
+        history_df = target.history().filter(F.col("version") > last_logged_version).collect()
+        validation_failures = sum([int(commit["operationMetrics"]["numTargetRowsInserted"]) for commit in history_df if commit["operation"] == "DELETE"])
 
         row = [(
             pipeline_start_time,
