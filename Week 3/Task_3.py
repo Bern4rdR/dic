@@ -13,6 +13,8 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
+import hashlib
+
 
 SCHEMA_REGISTRY = "schema_versions"
 
@@ -30,13 +32,7 @@ def initialize_registry(spark):
         USING DELTA
     """)
 
-import hashlib
-
-
-def register_schema_version(
-    spark,
-    table_name: str,
-):
+def register_schema_version(spark, table_name: str):
     """
     Register the current schema of a Delta table if it differs
     from the latest registered schema.
@@ -156,16 +152,12 @@ def update_pipeline_execution(spark: SparkSession, new_df, table_name: str):
     Args:
         new_df: The new DataFrame to be merged into the target Delta table. Retrieved from csv or parquet file.
     """
-    # Get the current timestamp for the start of the pipeline execution so that it is easily added to the pipeline monitor table. F.current_timestamp() is not what we want here because it will be evaluated at the time of writing to the table, not at the time of execution.
-    pipeline_start_time = datetime.now()
-
     processed_records = new_df.count()
     
-    # TODO: validate data, also return number of validation failures
-    # validate(new_df)
-    validation_failures = None # TODO: Should be a real count of validation failures
+    # ------------------------------------------
+    # ------ Merge operation setup ------
+    # ------------------------------------------
     
-
     target = DeltaTable.forName(spark, table_name)
     target_df = spark.table(table_name)
 
@@ -176,6 +168,21 @@ def update_pipeline_execution(spark: SparkSession, new_df, table_name: str):
     condition = " AND ".join(
         [f"t.`{c}` <=> s.`{c}`" for c in compare_cols]
     )
+
+    # Get the current timestamp for the start of the pipeline execution so that it is easily added to the pipeline monitor table. F.current_timestamp() is not what we want here because it will be evaluated at the time of writing to the table, not at the time of execution.
+    pipeline_start_time = datetime.now()
+
+    # ------------------------------------------
+    # ------------- Validation -----------------
+    # ------------------------------------------
+
+    # TODO: validate data, also return number of validation failures
+    # validate(new_df)
+    validation_failures = None # TODO: Should be a real count of validation failures
+
+    # ------------------------------------------
+    # ------ Merge operation ------
+    # ------------------------------------------
 
     ( # Merge the new DataFrame into the target Delta table, only inserts non-duplicate rows
         target.alias("t")
@@ -188,8 +195,11 @@ def update_pipeline_execution(spark: SparkSession, new_df, table_name: str):
     )
 
     pipeline_end_time = datetime.now()
-
     
+    # ------------------------------------------
+    # ----------- Pipeline monitoring ----------
+    # ------------------------------------------
+
     initialize_pipeline_monitor_table(spark)
 
     # get the latest delta version noted in pipeline_monitor table for this table_name
@@ -218,13 +228,8 @@ def update_pipeline_execution(spark: SparkSession, new_df, table_name: str):
         if current_schema_version is None:
             raise ValueError(f"No schema version found for table {table_name}")
 
-        # Get the number of records processed, inserted, and rejected
-
-        
         metrics = target.history(1).select("operationMetrics").first()
         
-        
-
         # get numTargetRowsInserted from operationMetrics, metrics is a Row object, so we need to access the dictionary inside it
         metrics = metrics.asDict()["operationMetrics"]
 
