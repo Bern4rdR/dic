@@ -17,10 +17,12 @@ from pyspark.sql.types import (
 
 import hashlib
 
+
 SRC_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SRC_DIR))
 from validation import validate_table, filter_table
 
+from log import log_step
 
 SCHEMA_REGISTRY = "schema_versions"
 
@@ -206,11 +208,12 @@ def update_pipeline_execution(spark: SparkSession, new_df, table_name: str):
                     if "expr" in base_attr and "expr" not in attr:
                         attr["expr"] = base_attr["expr"]
 
-    # validate data
-    if rules:
-        schema_issues = validate_table(new_df, rules)
-        if schema_issues:
-            print(f"[{table_name}] warnings:\n  " + "\n  ".join(schema_issues))
+    with log_step(f"Validating data for {table_name}", info={"rules": rules}):
+        # validate data
+        if rules:
+            schema_issues = validate_table(new_df, rules)
+            if schema_issues:
+                print(f"[{table_name}] warnings:\n  " + "\n  ".join(schema_issues))
 
     # ------------------------------------------
     # ------ Merge operation ------
@@ -232,82 +235,82 @@ def update_pipeline_execution(spark: SparkSession, new_df, table_name: str):
     # ----------- Pipeline monitoring ----------
     # ------------------------------------------
 
-    initialize_pipeline_monitor_table(spark)
+    with log_step(f"Pipeline monitoring for {table_name}"):
 
-    # get the latest delta version noted in pipeline_monitor table for this table_name
-    latest_delta_version = (
-        spark.table("pipeline_monitor")
-        .filter(F.col("table_name") == table_name)
-        .select("delta_version")
-        .orderBy(F.col("delta_version").desc())
-        .limit(1)
-        .collect()
-    )
-    # if there is no latest delta version, set it to -1
-    if not latest_delta_version:
-        latest_delta_version = [{"delta_version": -1}]
+        initialize_pipeline_monitor_table(spark)
 
-    latest_delta_version[0]["delta_version"]
+        # get the latest delta version noted in pipeline_monitor table for this table_name
+        latest_delta_version = (
+            spark.table("pipeline_monitor")
+            .filter(F.col("table_name") == table_name)
+            .select("delta_version")
+            .orderBy(F.col("delta_version").desc())
+            .limit(1)
+            .collect()
+        )
+        # if there is no latest delta version, set it to -1
+        if not latest_delta_version:
+            latest_delta_version = [{"delta_version": -1}]
 
-    last_logged_version = latest_delta_version[0]["delta_version"]
-    current_target_version = target.history(1).select("version").first()["version"]
-    # only update the pipeline monitor table if the delta version has changed for the target table (i.e something has changed)
-    if current_target_version > last_logged_version:
-        print(f"Did update to Delta table {table_name}")
+        last_logged_version = latest_delta_version[0]["delta_version"]
+        current_target_version = target.history(1).select("version").first()["version"]
+        # only update the pipeline monitor table if the delta version has changed for the target table (i.e something has changed)
+        if current_target_version > last_logged_version:
+            print(f"Did update to Delta table {table_name}")
 
-        # Update the pipeline monitor table with the latest execution details.
+            # Update the pipeline monitor table with the latest execution details.
 
-        current_schema_version = get_current_schema_version(spark, table_name)
+            current_schema_version = get_current_schema_version(spark, table_name)
 
-        if current_schema_version is None:
-            raise ValueError(f"No schema version found for table {table_name}")
+            if current_schema_version is None:
+                raise ValueError(f"No schema version found for table {table_name}")
 
-        metrics = target.history(1).select("operationMetrics").first()
+            metrics = target.history(1).select("operationMetrics").first()
 
-        # get numTargetRowsInserted from operationMetrics, metrics is a Row object, so we need to access the dictionary inside it
-        metrics = metrics.asDict()["operationMetrics"]
+            # get numTargetRowsInserted from operationMetrics, metrics is a Row object, so we need to access the dictionary inside it
+            metrics = metrics.asDict()["operationMetrics"]
 
-        print(f"Operation metrics: {metrics}")
+            print(f"Operation metrics: {metrics}")
 
-        inserted_rows = int(metrics.get("numTargetRowsInserted", 0))
-        rejected_rows = processed_records - inserted_rows
+            inserted_rows = int(metrics.get("numTargetRowsInserted", 0))
+            rejected_rows = processed_records - inserted_rows
 
-		# count rows that failed to validate
-        history_df = target.history().filter(F.col("version") > last_logged_version).collect()
-        validation_failures = sum([int(commit["operationMetrics"]["numTargetRowsInserted"]) for commit in history_df if commit["operation"] == "DELETE"])
+            # count rows that failed to validate TODO: does not appear to be correct, the merge should only try to insert already validated rows so the delta log history won't show anything
+            history_df = target.history().filter(F.col("version") > last_logged_version).collect()
+            validation_failures = sum([int(commit["operationMetrics"]["numTargetRowsInserted"]) for commit in history_df if commit["operation"] == "DELETE"])
 
-        row = [(
-            pipeline_start_time,
-            pipeline_end_time,
-            processed_records,
-            inserted_rows,
-            rejected_rows,
-            validation_failures,
-            table_name,
-            current_schema_version,
-            target.history(1).select("version").first()["version"]
-        )]
+            row = [(
+                pipeline_start_time,
+                pipeline_end_time,
+                processed_records,
+                inserted_rows,
+                rejected_rows,
+                validation_failures,
+                table_name,
+                current_schema_version,
+                target.history(1).select("version").first()["version"]
+            )]
 
-        df = (
-            spark.createDataFrame(
-                row,
-                """
-                execution_start_time TIMESTAMP,
-                execution_end_time TIMESTAMP,
-                processed_records LONG,
-                inserted_records LONG,
-                rejected_records LONG,
-                validation_failures LONG,
-                table_name STRING,
-                schema_version LONG,
-                delta_version LONG
-                """
+            df = (
+                spark.createDataFrame(
+                    row,
+                    """
+                    execution_start_time TIMESTAMP,
+                    execution_end_time TIMESTAMP,
+                    processed_records LONG,
+                    inserted_records LONG,
+                    rejected_records LONG,
+                    validation_failures LONG,
+                    table_name STRING,
+                    schema_version LONG,
+                    delta_version LONG
+                    """
+                )
             )
-        )
 
-        df.write.format("delta").mode("append").saveAsTable(
-            "pipeline_monitor"
-        )
+            df.write.format("delta").mode("append").saveAsTable(
+                "pipeline_monitor"
+            )
 
 def read_pipeline_monitor(spark: SparkSession):
     """
