@@ -51,3 +51,9 @@ The code for creating and benchmarking the two partitioned versions of `taxi_tri
 # Week 2 Analysis
 
 The implementations for all tasks in Week 2 can be seen in the Jupyter Notebooks in the `Week 2` folder. 
+
+# Week 3: Operating and Maintaining the Urban Data Platform
+
+To generate the incremental update datasets, the Task 1 notebooks in `Week 3/` corresponding to each dataset should be run first. These can then be ingested using `Task 1 Pipeline.ipynb`. To monitor the pipeline executions just performed, `Task 3 Monitoring.ipynb` can the run. 
+
+Schema evolution is handled through custom configuration files seen in `ingestion_update_configuration/` and all evaluation experiment results found in the report can be retrieved through checking the `Task 3 Monitoring.ipynb` notebook output as well as the logging files produced under `logs/`.
