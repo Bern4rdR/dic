@@ -32,8 +32,12 @@ builder = (
         "org.apache.spark.sql.delta.catalog.DeltaCatalog"
     )
 
+    # memory stuff for ML training
+    .config("spark.executor.memory", "8g")
+    .config("spark.driver.memory", "4g")
+
 	# Disable hive column checks
-     .config(
+    .config(
         "spark.hadoop.hive.metastore.disallow.incompatible.col.type.changes",
         "false"
     )
