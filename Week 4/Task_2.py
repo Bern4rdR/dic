@@ -88,6 +88,7 @@ def train_model(features_df, nr_trees=80, max_depth=25):
 	categorical_cols = [
 		"pu_weekday",
 		"pu_hour",
+		"pu_county",
 		"cldc"
 	]
 
@@ -215,12 +216,18 @@ if __name__ == "__main__":
 	#-------------------#
 
 	if recompute_features or not spark.catalog.tableExists("features"):
-		spark.sql("DROP TABLE features")
+		spark.sql("DROP TABLE IF EXISTS features")
 
 		query = f"""
-			SELECT TO_DATE(pu_datetime) AS pu_date, date_format(pu_datetime, 'EEE') AS pu_weekday, hour(pu_datetime) AS pu_hour, temp, rhum, prcp, cldc, COUNT(*) AS demand
+			SELECT
+				TO_DATE(pu_datetime) AS pu_date,
+				date_format(pu_datetime, 'EEE') AS pu_weekday,
+				hour(pu_datetime) AS pu_hour,
+				pu_county,
+				temp, rhum, prcp, cldc,
+				COUNT(*) AS demand
 			FROM integrated_taxi_trips
-			GROUP BY pu_date, pu_weekday, pu_hour, temp, rhum, prcp, cldc
+			GROUP BY pu_date, pu_weekday, pu_hour, pu_county, temp, rhum, prcp, cldc
 			ORDER BY demand DESC
 			"""
 		features_df = spark.sql(query)
@@ -292,9 +299,10 @@ if __name__ == "__main__":
 	if do_train:
 		model, _, test_set = train_model(features_df)
 
-	#----------------#
-	# Evaluate model #
-	#----------------#
+		# only evaluate / save model if a new one has been trained
+		if do_evaluate:
+			evaluate_model(model, test_set)
 
-	if do_evaluate:
-		evaluate_model(model, test_set)
+		# prompt user to save model
+		if input("Save model? (Y/n): ").capitalize() == "Y":
+			model.write().overwrite().save("models/")
