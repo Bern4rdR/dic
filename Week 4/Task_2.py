@@ -206,14 +206,14 @@ if __name__ == "__main__":
 	print(f'current database: {spark.catalog.currentDatabase()}')
 	print(f'spark tables: {spark.catalog.listTables()}')
 
-	compute_features_from_source = True
+	compute_features_from_source = False
 	recompute_features = True
 
 	do_features_summary_stats = True
 
 	grid_search = False
-	do_train = False
-	do_evaluate = False
+	do_train = True
+	do_evaluate = True
 
 	#-------------------#
 	# Feature selection #
