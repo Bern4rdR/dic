@@ -10,6 +10,9 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from custom_builder import builder
 
+from log import log_step
+
+
 
 def evaluate_model(model, test_set):
 	from pyspark.ml.evaluation import RegressionEvaluator
@@ -203,43 +206,101 @@ if __name__ == "__main__":
 	print(f'current database: {spark.catalog.currentDatabase()}')
 	print(f'spark tables: {spark.catalog.listTables()}')
 
-	recompute_features = False
+	compute_features_from_source = True
+	recompute_features = True
 
 	do_features_summary_stats = True
 
 	grid_search = False
-	do_train = True
-	do_evaluate = True
+	do_train = False
+	do_evaluate = False
 
 	#-------------------#
 	# Feature selection #
 	#-------------------#
 
+	with log_step("Compute features from source"):
+		if compute_features_from_source:
+
+			from ingestion import ingest, transform
+			# Ingest and transform data
+			print(f"\n{'⠛'*80}\nIngesting and transforming data...")
+			for config_file in Path("../ingestion_configuration").glob("*.json"):
+				df, config = ingest(spark, config_file)
+				result_df = transform(df, config)
+
+				result_df.printSchema()
+				result_df.show(truncate=False)
+
+				# persist delta table
+				result_df.write.format("delta").mode("overwrite").saveAsTable(f"{config['name']}")
+
+			# Validate
+			import os
+			import json
+			from validation import validate_table, filter_table
+			TABLE_RULES_SRC = Path("./ingestion_configuration")
+			WAREHOUSE_DIR = Path("./spark_project/spark-warehouse")
+
+			print(f"\n{'⠛'*80}\nValidating tables...")
+			for rule_file in os.listdir(TABLE_RULES_SRC):
+				with open(Path(TABLE_RULES_SRC / rule_file), "r") as f:
+					rules = json.load(f)
+
+				table_path = str(WAREHOUSE_DIR / rules['name'])
+				df = spark.read.format("delta").load(table_path)
+
+				print(f"\n{'⠛'*80}\nValidating {rules['name']}...")
+			
+				if schema_issues := validate_table(df, rules):
+					print("\n".join(schema_issues))
+
+				dt = DeltaTable.forPath(spark, table_path)
+				filter_table(dt, rules)
+
+				# remove duplicate rows
+				if pk_cols := rules["primary_keys"]:
+					df = dt.toDF()
+					if df.groupBy(pk_cols).count().filter("count > 1").count() > 0: # only rewrite if deplicates exist
+						df = df.dropDuplicates(pk_cols)
+						df.write.format("delta").mode("overwrite").save(table_path)
+			
+			# Enrich
+			print(f"\n{'⠛'*80}\nEnriching data...")
+			from enrich import load_dfs, enrich
+			trips_df, pu_zone, do_zone, aq_df, weather_df = load_dfs(spark)
+
+			enriched_df = enrich(trips_df, pu_zone, do_zone, aq_df, weather_df)
+
+			enriched_df.printSchema()
+			enriched_df.show()
+			spark.sql("DROP TABLE IF EXISTS integrated_taxi_trips")
+			enriched_df.write.format("delta").mode("overwrite").saveAsTable("integrated_taxi_trips")
+
 	if recompute_features or not spark.catalog.tableExists("features"):
-		spark.sql("DROP TABLE IF EXISTS features")
+		with log_step("Compute features"):
+			spark.sql("DROP TABLE IF EXISTS features")
 
-		query = f"""
-			SELECT
-				TO_DATE(pu_datetime) AS pu_date,
-				date_format(pu_datetime, 'EEE') AS pu_weekday,
-				hour(pu_datetime) AS pu_hour,
-				pu_county,
-				temp, rhum, prcp, cldc,
-				COUNT(*) AS demand
-			FROM integrated_taxi_trips
-			GROUP BY pu_date, pu_weekday, pu_hour, pu_county, temp, rhum, prcp, cldc
-			ORDER BY demand DESC
-			"""
-		features_df = spark.sql(query)
+			query = f"""
+				SELECT
+					TO_DATE(pu_datetime) AS pu_date,
+					date_format(pu_datetime, 'EEE') AS pu_weekday,
+					hour(pu_datetime) AS pu_hour,
+					pu_county,
+					temp, rhum, prcp, cldc,
+					COUNT(*) AS demand
+				FROM integrated_taxi_trips
+				GROUP BY pu_date, pu_weekday, pu_hour, pu_county, temp, rhum, prcp, cldc
+				ORDER BY demand DESC
+				"""
+			features_df = spark.sql(query)
 
-		features_df = features_df.filter(F.col("demand").isNotNull()) # just to be sure we don't have any nulls in the demand column
+			features_df = features_df.filter(F.col("demand").isNotNull()) # just to be sure we don't have any nulls in the demand column
 
-		# write features_df to features table
-		features_df.write.format("delta").mode("overwrite").saveAsTable("features")
+			# write features_df to features table
+			features_df.write.format("delta").mode("overwrite").saveAsTable("features")
 	else:
 		features_df = spark.table("features")
-	
-		
 
 	features_df.show(10)
 		
@@ -250,14 +311,6 @@ if __name__ == "__main__":
 	if do_features_summary_stats:
 		print(features_df.columns)
 		features_df.summary().show()
-
-	# features_df.select(
-	# 	F.min("demand").alias("min"),
-	# 	F.max("demand").alias("max"),
-	# 	F.avg("demand").alias("mean"),
-	# 	F.variance("demand").alias("variance")
-	# ).show()
-
 
 	#----------------#
 	# Grid search    #
@@ -297,11 +350,13 @@ if __name__ == "__main__":
 	features_df.persist(StorageLevel.MEMORY_AND_DISK)
 
 	if do_train:
-		model, _, test_set = train_model(features_df)
+		with log_step("Train model"):
+			model, _, test_set = train_model(features_df)
 
-		# only evaluate / save model if a new one has been trained
-		if do_evaluate:
-			evaluate_model(model, test_set)
+		with log_step("Evaluate model"):
+			# only evaluate / save model if a new one has been trained
+			if do_evaluate:
+				evaluate_model(model, test_set)
 
 		# prompt user to save model
 		if input("Save model? (Y/n): ").capitalize() == "Y":
